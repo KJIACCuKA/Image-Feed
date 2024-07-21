@@ -24,6 +24,7 @@ final class WebViewViewController: UIViewController {
         webView.navigationDelegate = self
 
         loadWebView()
+        print("DEBUG:", "WebView loaded")
     }
 
     @IBAction private func didTapBackButton(_ sender: Any?) {
@@ -63,15 +64,17 @@ private extension WebViewViewController {
     func loadWebView() {
         var urlComponents = URLComponents(string: APIConstants.authorizeURLString)
         urlComponents?.queryItems = [
-            URLQueryItem(name: "client_id", value: accessKey),
-            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "client_id", value: Constants.accessKey),
+            URLQueryItem(name: "redirect_uri", value: Constants.redirectURI),
             URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "scope", value: accessScope)
+            URLQueryItem(name: "scope", value: Constants.accessScope)
         ]
         if let url = urlComponents?.url {
             let request = URLRequest(url: url)
             webView.load(request)
             updateProgress()
+        } else {
+            print("ERROR: cannot create URL")
         }
     }
     
@@ -97,6 +100,7 @@ extension WebViewViewController: WKNavigationDelegate {
     ) {
         if let code = code(from: navigationAction) {
             delegate?.webViewViewController(self, didAuthenticateWithCode: code)
+            print("DEBUG:", "WebViewViewController Delegate called")
             decisionHandler(.cancel)
         } else {
             decisionHandler(.allow)

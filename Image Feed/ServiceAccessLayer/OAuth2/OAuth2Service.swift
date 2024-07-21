@@ -14,6 +14,8 @@ final class OAuth2Service {
         }
     }
     
+    private init() {}
+    
     func fetchOAuthToken(_ code: String, completion: @escaping (Result<String, Error>) -> Void) {
         guard let request = authTokenRequest(code: code) else { return }
         
@@ -37,9 +39,9 @@ extension OAuth2Service {
         guard let url = URL(string: "https://unsplash.com") else { return nil }
         return URLRequest.makeHTTPRequest(
             path: "/oauth/token"
-            + "?client_id=\(accessKey)"
-            + "&&client_secret=\(secretKey)"
-            + "&&redirect_uri=\(redirectURI)"
+            + "?client_id=\(Constants.accessKey)"
+            + "&&client_secret=\(Constants.secretKey)"
+            + "&&redirect_uri=\(Constants.redirectURI)"
             + "&&code=\(code)"
             + "&&grant_type=authorization_code",
             httpMethod: "POST",
@@ -80,7 +82,7 @@ extension URLRequest {
     static func makeHTTPRequest(
         path: String,
         httpMethod: String,
-        baseURL: URL = defaultBaseURL
+        baseURL: URL = Constants.defaultBaseURL
     ) -> URLRequest? {
         guard let url = URL(string: path, relativeTo: baseURL)
         else {
@@ -97,6 +99,11 @@ enum NetworkError: Error {
     case httpStatusCode(Int)
     case urlRequestError(Error)
     case urlSessionError
+    case badRequest
+    case unauthorized
+    case forbidden
+    case notFound
+    case serverError
 }
 
 extension URLRequest {
@@ -111,22 +118,40 @@ extension URLRequest {
             }
         }
         
-        let task = OAuth2Service.shared.urlSession.dataTask(with: request, completionHandler: { data, response, error in
-            if let data = data,
-               let response = response,
-               let statusCode = (response as? HTTPURLResponse)?.statusCode
-            {
-                if 200 ..< 300 ~= statusCode {
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let data = data, let response = response, let statusCode = (response as? HTTPURLResponse)?.statusCode {
+                switch statusCode {
+                case 200...299:
+                    print("DEBUG:", "Received success HTTP status code: \(statusCode)")
                     fulfillCompletion(.success(data))
-                } else {
+                case 400:
+                    print("ERROR:", "Bad request \(statusCode)")
+                    fulfillCompletion(.failure(NetworkError.badRequest))
+                case 401:
+                    print("ERROR:", "Unauthorized \(statusCode) - Invalid Access Token")
+                    fulfillCompletion(.failure(NetworkError.unauthorized))
+                case 403:
+                    print("ERROR:", "Forbidden \(statusCode)")
+                    fulfillCompletion(.failure(NetworkError.forbidden))
+                case 404:
+                    print("ERROR:", "Not Found \(statusCode)")
+                    fulfillCompletion(.failure(NetworkError.notFound))
+                    
+                case 500, 503:
+                    print("ERROR:", "Internal Server Error \(statusCode)")
+                    fulfillCompletion(.failure(NetworkError.serverError))
+                default:
+                    print("ERROR:", "HTTP status code: \(statusCode)")
                     fulfillCompletion(.failure(NetworkError.httpStatusCode(statusCode)))
                 }
             } else if let error = error {
+                print("ERROR:", error.localizedDescription)
                 fulfillCompletion(.failure(NetworkError.urlRequestError(error)))
             } else {
+                print("ERROR: Unknown error")
                 fulfillCompletion(.failure(NetworkError.urlSessionError))
             }
-        })
+        }
         task.resume()
     }
 }
