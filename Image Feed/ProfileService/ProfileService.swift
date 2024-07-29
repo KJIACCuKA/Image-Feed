@@ -1,73 +1,101 @@
 import UIKit
 
-
-struct ProfileResult: Decodable {
-    let userName: String?
-    let firstName: String?
-    let lastName: String?
-    let bio: String?
-    
-    enum CodingKeys: String, CodingKey {
-        case userName = "username"
-        case firstName = "first_name"
-        case lastName = "last_name"
-        case bio = "bio"
-    }
+enum ProfileServiceError: Error {
+    case invalidRequest
+    case invalidURL
+    case noData
+    case decodingError
+    case missingProfileImageURL
 }
 
-public struct Profile {
-    let userName: String?
-    let name: String?
-    let loginName: String?
-    let bio: String?
+struct Profile: Codable {
+    let username: String
+    let name: String
+    let loginName: String
+    let bio: String
+}
+extension Profile {
+    init(from profileResult: ProfileServiceResponseBody) {
+        self.username = profileResult.username
+        self.name = "\(profileResult.firstName ?? "") \(profileResult.lastName ?? "")"
+        self.loginName = "@\(profileResult.username)"
+        self.bio = profileResult.bio ?? ""
+    }
 }
 
 final class ProfileService {
     
     static let shared = ProfileService()
-    private (set) var profile: Profile?
-    private var task: URLSessionTask?
     
     private init() {}
-}
-
-extension ProfileService {
     
-    public func fetchProfile(_ token: String, completion: @escaping (Result<Profile, Error>) -> Void) {
-        
+    private(set) var profile: Profile?
+    
+    private let urlSession = URLSession.shared
+    private var task: URLSessionTask?
+    private var lastToken: String?
+
+    func fetchProfile(_ token: String, completion: @escaping (Result<Profile, Error>) -> Void) {
         
         assert(Thread.isMainThread)
+        guard lastToken != token else {
+            completion(.failure(ProfileServiceError.invalidRequest))
+            return
+        }
+        
         task?.cancel()
+        lastToken = token
         
+        guard let request = makeProfileRequest(token: token) else {
+            completion(.failure(ProfileServiceError.invalidURL))
+            return
+        }
         
-        guard let request = fetchProfileRequest(token) else { return }
-        
-        
-        let task = URLSession.shared.objectTask(for: request) { [weak self] (result: Result<ProfileResult, Error>) in
-            guard let self = self else { return }
-            self.task = nil
-            switch result {
-            case .success(let profileResult):
-                self.profile = Profile(userName: profileResult.userName ?? "",
-                                       name: "\(profileResult.firstName ?? "") " + "\(profileResult.lastName ?? "")",
-                                       loginName: "@\(profileResult.userName ?? "")" ,
-                                       bio: profileResult.bio ?? "")
-                completion(.success(self.profile!))
-            case .failure(let error):
-                completion(.failure(error))
+        let task = urlSession.objectTask(for: request) { [weak self] (result: Result<ProfileServiceResponseBody, Error>) in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let profileResult):
+                        let profile = Profile(from: profileResult)
+                        self?.profile = profile
+                        completion(.success(profile))
+                case .failure(let error):
+                    if let networkError = error as? NetworkError {
+                        switch networkError {
+                        case .httpStatusCode(let statusCode):
+                            print("HTTP status code error: \(statusCode)")
+                        case .urlRequestError(let requestError):
+                            print("URL request error: \(requestError)")
+                        case .urlSessionError:
+                            print("URL session error: \(error)")
+                        }
+                    } else {
+                        print("Other network error: \(error)")
+                    }
+                    completion(.failure(error))
+                }
+                self?.task = nil
+                self?.lastToken = nil
             }
         }
         self.task = task
-        task?.resume()
+        task.resume()
     }
-    
-    private func fetchProfileRequest(_ token: String) -> URLRequest? {
-        guard let url = URL(string: "https://api.unsplash.com") else { return nil }
-        var request = URLRequest.makeHTTPRequest(
-            path: "/me",
-            httpMethod: "GET",
-            baseURL: url)
-        request?.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+    private func makeProfileRequest(token: String) -> URLRequest? {
+        guard let baseURL = URL(string: "https://api.unsplash.com") else {
+            assertionFailure("Failed to create URL")
+            return nil
+        }
+        
+        guard let url = URL(string: "/me", relativeTo: baseURL) else {
+            return nil
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         return request
     }
+
+
 }

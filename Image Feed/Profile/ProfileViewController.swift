@@ -21,7 +21,7 @@ final class ProfileViewController: UIViewController {
         commentLabelSettings()
         exitButtonSettings()
         profileImageServiceObserver = NotificationCenter.default
-            .addObserver(forName: ProfileImageService.DidChangeNotification,
+            .addObserver(forName: ProfileImageService.didChangeNotification,
                          object: nil,
                          queue: .main
             ) { [weak self] _ in

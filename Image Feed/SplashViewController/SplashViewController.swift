@@ -14,7 +14,7 @@ final class SplashViewController: UIViewController {
         
         if OAuth2TokenStorage().token != nil {
             guard let token = OAuth2TokenStorage().token else { return }
-            fetchProfile(token: token)
+            fetchProfile(token)
         } else {
             let sb = UIStoryboard(name: "Main", bundle: nil)
             guard let viewController = sb.instantiateViewController(withIdentifier: "AuthViewController") as? AuthViewController else {
@@ -67,7 +67,7 @@ extension SplashViewController: AuthViewControllerDelegate {
     }
 
     private func fetchOAuthToken(_ code: String) {
-        oauth2Service.fetchOAuthToken(code) { [weak self] result in
+        oauth2Service.fetchOAuthToken(code: code) { [weak self] result in
             guard let self = self else { return }
             switch result {
             case .success:
@@ -79,18 +79,34 @@ extension SplashViewController: AuthViewControllerDelegate {
         }
     }
     
-    private func fetchProfile(token: String) {
+    private func fetchProfile(_ token: String) {
+        UIBlockingProgressHUD.show()
         profileService.fetchProfile(token) { [weak self] result in
+            UIBlockingProgressHUD.dismiss()
+            
             guard let self = self else { return }
+            
             switch result {
             case .success(let profile):
-                self.profileImageService.fetchProfileImageURL(token, username: profile.userName) { _ in }
-                self.switchToTabBarController()
+                self.fetchProfileImage(username: profile.username)
             case .failure:
                 break
             }
-            UIBlockingProgressHUD.dismiss()
         }
     }
     
+    private func fetchProfileImage(username: String) {
+        profileImageService.fetchProfileImageURL("", username: username) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success(let imageURL):
+                print("Profile image URL: \(imageURL)")
+                self.switchToTabBarController()
+            case .failure(let error):
+                print("Failed to fetch profile image URL: \(error)")
+                // Handle error as needed
+                self.switchToTabBarController()
+            }
+        }
+    }
 }

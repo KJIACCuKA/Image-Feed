@@ -13,10 +13,18 @@ struct ImageURL: Decodable {
 }
 
 final class ProfileImageService {
-    static let DidChangeNotification = Notification.Name(rawValue: "ProfileImageProviderDidChange")
+    
+    enum ProfileImageServiceError: Error {
+        case invalidRequest
+    }
+    
+    static let didChangeNotification = Notification.Name(rawValue: "ProfileImageProviderDidChange")
     static let shared = ProfileImageService()
+    private let storage = OAuth2TokenStorage()
     private (set) var avatarURL: String?
     private var task: URLSessionTask?
+    
+    private init() {}
 }
 
 extension ProfileImageService {
@@ -27,7 +35,10 @@ extension ProfileImageService {
         task?.cancel()
         
         guard let username = username else { return }
-        guard let request = fetchProfileImageRequest(token, username: username) else { return }
+        guard let request = fetchProfileImageRequest(storage.token ?? "", username: username) else {
+            completion(.failure(ProfileImageServiceError.invalidRequest))
+            return
+        }
         
         
         let task = URLSession.shared.objectTask(for: request) { [weak self] (result: Result<UserResult, Error>) in
@@ -37,14 +48,16 @@ extension ProfileImageService {
             case .success(let userResult):
                 self.avatarURL = userResult.profileImage?.small
                 NotificationCenter.default
-                    .post(name: ProfileImageService.DidChangeNotification, object: self, userInfo: ["URL" : self.avatarURL ?? ""])
+                    .post(name: ProfileImageService.didChangeNotification, object: self, userInfo: ["URL" : self.avatarURL ?? ""])
                 completion(.success(self.avatarURL))
             case .failure(let error):
+                print("Function: \(#function), line \(#line) Failed to fetch ProfileResult")
+                print(error.localizedDescription)
                 completion(.failure(error))
             }
         }
         self.task = task
-        task?.resume()
+        task.resume()
     }
     
     private func fetchProfileImageRequest(_ token: String, username: String) -> URLRequest? {

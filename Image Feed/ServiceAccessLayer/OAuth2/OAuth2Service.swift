@@ -5,6 +5,9 @@ final class OAuth2Service {
     static let shared = OAuth2Service()
     public let urlSession = URLSession.shared
     
+    private var task: URLSessionTask?
+    private var lastCode: String?
+    
     private (set) var authToken: String? {
         get {
             return OAuth2TokenStorage().token
@@ -16,20 +19,41 @@ final class OAuth2Service {
     
     private init() {}
     
-    func fetchOAuthToken(_ code: String, completion: @escaping (Result<String, Error>) -> Void) {
-        guard let request = authTokenRequest(code: code) else { return }
+    func fetchOAuthToken(code: String, completion: @escaping (Result<String, Error>) -> Void) {
         
-        object(for: request) { [weak self] result in
-            guard let self = self else { return }
+        UIBlockingProgressHUD.show()
+        
+        assert(Thread.isMainThread)
+        guard lastCode != code else {
+            completion(.failure(AuthServiceError.invalidRequest))
+            return
+        }
+        
+        task?.cancel()
+        lastCode = code
+        
+        guard let request = authTokenRequest(code: code) else {
+            completion(.failure(AuthServiceError.invalidRequest))
+            return
+        }
+        
+        let task = urlSession.objectTask(for: request) { [weak self] (result: Result<OAuthTokenResponseBody, any Error>) in
             switch result {
-            case .success(let body):
-                let authToken = body.accessToken
-                self.authToken = authToken
-                completion(.success(authToken))
+            case .success(let token):
+                UIBlockingProgressHUD.dismiss()
+                completion(.success(token.accessToken))
+                
+                self?.task = nil
+                self?.lastCode = nil
             case .failure(let error):
+                UIBlockingProgressHUD.dismiss()
+                print("Function: \(#function), line \(#line) Failed to Decode OAuthTokenResponseBody")
+                print(error.localizedDescription)
                 completion(.failure(error))
             }
         }
+        self.task = task
+        task.resume()
     }
 }
 
@@ -48,20 +72,6 @@ extension OAuth2Service {
             baseURL: url)
     }
     
-    private func object(for request: URLRequest,
-                        completion: @escaping (Result<OAuthTokenResponseBody, Error>) -> Void) {
-        let decoder = JSONDecoder()
-        return request.data(for: request) { (result: Result<Data, Error>) in
-            let response = result.flatMap { data -> Result<OAuthTokenResponseBody, Error> in
-                Result {
-                    try decoder.decode(OAuthTokenResponseBody.self, from: data)
-                }
-            }
-            completion(response)
-            return
-        }
-    }
-    
     private struct OAuthTokenResponseBody: Decodable {
         let accessToken: String
         let tokenType: String
@@ -77,64 +87,13 @@ extension OAuth2Service {
     }
 }
 
+enum AuthServiceError: Error {
+    case invalidRequest
+}
+
 
 enum NetworkError: Error {
     case httpStatusCode(Int)
     case urlRequestError(Error)
     case urlSessionError
-    case badRequest
-    case unauthorized
-    case forbidden
-    case notFound
-    case serverError
-}
-
-extension URLRequest {
-    func data(
-        for request: URLRequest,
-        completion: @escaping (Result<Data, Error>) -> Void)
-    {
-        let fulfillCompletion: (Result<Data, Error>) -> Void = { result in
-            DispatchQueue.main.async {
-                completion(result)
-                return
-            }
-        }
-        
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let data = data, let response = response, let statusCode = (response as? HTTPURLResponse)?.statusCode {
-                switch statusCode {
-                case 200...299:
-                    print("DEBUG:", "Received success HTTP status code: \(statusCode)")
-                    fulfillCompletion(.success(data))
-                case 400:
-                    print("ERROR:", "Bad request \(statusCode)")
-                    fulfillCompletion(.failure(NetworkError.badRequest))
-                case 401:
-                    print("ERROR:", "Unauthorized \(statusCode) - Invalid Access Token")
-                    fulfillCompletion(.failure(NetworkError.unauthorized))
-                case 403:
-                    print("ERROR:", "Forbidden \(statusCode)")
-                    fulfillCompletion(.failure(NetworkError.forbidden))
-                case 404:
-                    print("ERROR:", "Not Found \(statusCode)")
-                    fulfillCompletion(.failure(NetworkError.notFound))
-                    
-                case 500, 503:
-                    print("ERROR:", "Internal Server Error \(statusCode)")
-                    fulfillCompletion(.failure(NetworkError.serverError))
-                default:
-                    print("ERROR:", "HTTP status code: \(statusCode)")
-                    fulfillCompletion(.failure(NetworkError.httpStatusCode(statusCode)))
-                }
-            } else if let error = error {
-                print("ERROR:", error.localizedDescription)
-                fulfillCompletion(.failure(NetworkError.urlRequestError(error)))
-            } else {
-                print("ERROR: Unknown error")
-                fulfillCompletion(.failure(NetworkError.urlSessionError))
-            }
-        }
-        task.resume()
-    }
 }
