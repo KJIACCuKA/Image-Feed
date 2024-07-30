@@ -1,72 +1,56 @@
 import UIKit
 
-struct UserResult: Decodable {
-    let profileImage: ImageURL?
-    
-    enum CodingKeys: String, CodingKey {
-        case profileImage = "profile_image"
-    }
-}
-
-struct ImageURL: Decodable {
-    let small: String?
-}
 
 final class ProfileImageService {
     
-    enum ProfileImageServiceError: Error {
-        case invalidRequest
-    }
-    
     static let didChangeNotification = Notification.Name(rawValue: "ProfileImageProviderDidChange")
     static let shared = ProfileImageService()
-    private let storage = OAuth2TokenStorage()
-    private (set) var avatarURL: String?
+    private (set) var profileImageURL: String?
     private var task: URLSessionTask?
-    
+    private let urlSession = URLSession.shared
     private init() {}
-}
 
-extension ProfileImageService {
+    func makeProfileImageRequest(username: String) throws -> URLRequest? {
+        guard let baseURL = Constants.defaultBaseURL else {
+            throw ProfileImageServiceErrors.invalidBaseURL
+        }
+        guard let url = URL(string: "/users/\(username)", relativeTo: baseURL) else {
+            throw ProfileImageServiceErrors.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        guard let token = OAuth2TokenStorage().token else {
+            throw ProfileImageServiceErrors.tokenError
+        }
+        let tokenStringField = "Bearer \(token)"
+        
+        request.setValue(tokenStringField, forHTTPHeaderField: "Authorization")
+        return request
+    }
     
-    func fetchProfileImageURL(_ token: String, username: String?, completion: @escaping (Result<String?, Error>) -> Void) {
-        
+    func fetchProfileImageURL(username: String, _ completion: @escaping (Result<String, Error>) -> Void) {
         assert(Thread.isMainThread)
-        task?.cancel()
-        
-        guard let username = username else { return }
-        guard let request = fetchProfileImageRequest(storage.token ?? "", username: username) else {
-            completion(.failure(ProfileImageServiceError.invalidRequest))
+        guard let request = try? makeProfileImageRequest(username: username) else {
+            completion(.failure(ProfileImageServiceErrors.invalidRequest))
             return
         }
-        
-        
-        let task = URLSession.shared.objectTask(for: request) { [weak self] (result: Result<UserResult, Error>) in
-            guard let self = self else { return }
-            self.task = nil
+        let task = urlSession.objectTask(for: request) { (result: Result<UserResult, Error>) in
             switch result {
-            case .success(let userResult):
-                self.avatarURL = userResult.profileImage?.small
+            case .success(let response):
+                let profileImage = response.profileImage.large
+                self.profileImageURL = profileImage
+                completion(.success(profileImage))
                 NotificationCenter.default
-                    .post(name: ProfileImageService.didChangeNotification, object: self, userInfo: ["URL" : self.avatarURL ?? ""])
-                completion(.success(self.avatarURL))
+                    .post(name: ProfileImageService.didChangeNotification,
+                          object: self,
+                          userInfo: ["URL": profileImage])
             case .failure(let error):
-                print("Function: \(#function), line \(#line) Failed to fetch ProfileResult")
-                print(error.localizedDescription)
+                print("[\(String(describing: self)).\(#function)]: \(ProfileImageServiceErrors.fetchProfileError) - Ошибка получения URL изображения профиля, \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }
         self.task = task
         task.resume()
-    }
-    
-    private func fetchProfileImageRequest(_ token: String, username: String) -> URLRequest? {
-        guard let url = URL(string: "https://api.unsplash.com") else { return nil }
-        var request = URLRequest.makeHTTPRequest(
-            path: "/users/\(username)",
-            httpMethod: "GET",
-            baseURL: url)
-        request?.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        return request
     }
 }
