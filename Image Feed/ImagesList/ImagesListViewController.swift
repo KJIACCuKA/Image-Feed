@@ -1,6 +1,8 @@
 import UIKit
+import Kingfisher
 
 final class ImagesListViewController: UIViewController {
+    
     private let showSingleImageSegueIdentifier = "ShowSingleImage"
     let imageListService = ImageListService.shared
     var photos: [Photo] = []
