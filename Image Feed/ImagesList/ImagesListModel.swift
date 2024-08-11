@@ -4,7 +4,7 @@ import UIKit
 struct Photo {
     let id: String
     let size: CGSize
-    let createdAt: String
+    let createdAt: Date?
     let welcomeDescription: String?
     let thumbImageURL: String
     let largeImageURL: String
@@ -12,9 +12,10 @@ struct Photo {
     let isLiked: Bool
     
     init(result photo: PhotoResult) {
+        let dateFormatter = ISO8601DateFormatter()
         self.id = photo.id
         self.size = CGSize(width: photo.width, height: photo.height)
-        self.createdAt = photo.createdAt
+        self.createdAt = dateFormatter.date(from: photo.createdAt)
         self.welcomeDescription = photo.description ?? ""
         self.thumbImageURL = photo.urls?.thumb ?? ""
         self.largeImageURL = photo.urls?.full ?? ""

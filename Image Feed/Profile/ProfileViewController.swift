@@ -49,7 +49,7 @@ final class ProfileViewController: UIViewController {
         setupObserver()
         updateAvatar()
         updateProfileDetails(profile: profileService.profile)
-        exitButton.addTarget(self, action: #selector(logoutButtonDidTap), for: .touchUpInside)
+        exitButton.addTarget(self, action: #selector(exitButtonDidTap), for: .touchUpInside)
     }
     
     //MARK: - Private Methods
@@ -113,14 +113,33 @@ final class ProfileViewController: UIViewController {
         }
     }
     
-    @objc private func logoutButtonDidTap(_ sender: Any) {
-        OAuth2TokenStorage.deleteToken()
-        clearCookies()
-        clearWebsiteData()
+    @objc private func exitButtonDidTap(_ sender: Any) {
+        let alert = UIAlertController(title: "Пока, пока!", message: "Уверены что хотите выйти?", preferredStyle: .alert)
         
-        let viewController = SplashViewController()
-        viewController.modalPresentationStyle = .fullScreen
-        present(viewController, animated: true, completion: nil)
+        let yesAction = UIAlertAction(title: "Да", style: .default) { [weak self] _ in
+            guard let self = self else { return }
+            ProfileLogoutService.shared.logout()
+            self.navigateToSplashViewController()
+        }
+        
+        let noAction = UIAlertAction(title: "Нет", style: .default, handler: nil)
+        
+        alert.addAction(yesAction)
+        alert.addAction(noAction)
+        
+        present(alert, animated: true, completion: nil)
+    }
+    
+    private func navigateToSplashViewController() {
+        let splashVC = SplashViewController()
+        splashVC.modalPresentationStyle = .fullScreen
+        present(splashVC, animated: true, completion: nil)
+    }
+    
+    deinit {
+        if let observer = profileImageServiceObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
     
     //MARK: - Private UI-Methods
