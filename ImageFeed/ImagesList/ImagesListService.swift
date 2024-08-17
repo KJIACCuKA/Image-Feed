@@ -5,6 +5,8 @@ final class ImagesListService {
     static let didChangeNotification = Notification.Name("ImagesListServiceDidChange")
     private init() { }
     
+    private static let dateFormatter = ISO8601DateFormatter()
+    
     private let urlSession = URLSession.shared
     private var lastLoadedPage: Int?
     private var isFetchingPhotos = false
@@ -40,7 +42,7 @@ final class ImagesListService {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let photoResults):
-                    let newPhotos = photoResults.map { Photo(from: $0) }
+                    let newPhotos = photoResults.map { Photo(from: $0, date: ImagesListService.dateFormatter) }
                     self.photos.append(contentsOf: newPhotos)
                     self.lastLoadedPage = nextPage
                     NotificationCenter.default.post(name: ImagesListService.didChangeNotification, object: self, userInfo: ["newPhotos": newPhotos])
