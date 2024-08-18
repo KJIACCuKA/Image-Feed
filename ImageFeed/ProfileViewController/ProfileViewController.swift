@@ -93,42 +93,11 @@ final class ProfileViewController: UIViewController {
         return label
     }()
     
-    private lazy var favoriteLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Избранное"
-        label.font = UIFont.systemFont(ofSize: 23, weight: .bold)
-        label.textColor = .white
-        label.textAlignment = .left
-        label.numberOfLines = 1
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
-    private lazy var notificationLabel: UILabel = {
-        let label = UILabel()
-        label.backgroundColor = .ypBlue
-        label.text = "0"
-        label.textColor = .ypWhite
-        label.font = UIFont.systemFont(ofSize: 13)
-        label.textAlignment = .center
-        label.layer.cornerRadius = 11
-        label.clipsToBounds = true
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
     private lazy var spacer: UIView = {
         let element = UIView()
         
         element.translatesAutoresizingMaskIntoConstraints = false
         return element
-    }()
-    
-    private lazy var noPhotoImage: UIImageView = {
-        let imageView = UIImageView()
-        imageView.image = UIImage(named: "NoPhoto")
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        return imageView
     }()
     
     override func viewDidLoad() {
@@ -199,11 +168,7 @@ final class ProfileViewController: UIViewController {
         mainStackView.addArrangedSubview(infoStackView)
         mainStackView.addArrangedSubview(favoriteStackView)
         
-        favoriteStackView.addArrangedSubview(favoriteLabel)
-        favoriteStackView.addArrangedSubview(notificationLabel)
         favoriteStackView.addArrangedSubview(spacer)
-        
-        view.addSubview(noPhotoImage)
         
         headerStackView.addArrangedSubview(userPhoto)
         headerStackView.addArrangedSubview(logoutButton)
@@ -242,15 +207,7 @@ extension ProfileViewController {
             userPhoto.heightAnchor.constraint(equalToConstant: 70),
             
             logoutButton.widthAnchor.constraint(equalToConstant: 24),
-            logoutButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            
-            notificationLabel.widthAnchor.constraint(equalToConstant: 40),
-            notificationLabel.heightAnchor.constraint(equalToConstant: 22),
-            
-            noPhotoImage.topAnchor.constraint(equalTo: favoriteStackView.bottomAnchor, constant: 110),
-            noPhotoImage.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            noPhotoImage.widthAnchor.constraint(equalToConstant: 100),
-            noPhotoImage.heightAnchor.constraint(equalToConstant: 100)
+            logoutButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
         ])
     }
 }

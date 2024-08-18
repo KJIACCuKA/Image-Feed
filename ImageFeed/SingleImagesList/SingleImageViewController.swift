@@ -138,7 +138,9 @@ final class SingleImageViewController: UIViewController {
             .transition(.fade(0.3)),
             .cacheOriginalImage
         ]
+        UIBlockingProgressHUD.show()
         imageView.kf.setImage(with: url, placeholder: nil, options: options) { [weak self] result in
+            UIBlockingProgressHUD.dismiss()
             DispatchQueue.main.async {
                 self?.stubImageView.isHidden = true
                 switch result {
